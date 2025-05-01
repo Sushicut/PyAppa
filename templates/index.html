@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Safe Route Finder</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+    <!-- Inline JavaScript -->
+    <script>
+        const map = L.map('map').setView([14.727217, 121.061167], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        let startMarker = null;
+        let endMarker = null;
+        let routePolyline = null;
+
+        map.on('click', function(e) {
+            if (!startMarker) {
+                startMarker = L.marker(e.latlng).addTo(map).bindPopup('Start').openPopup();
+            } else if (!endMarker) {
+                endMarker = L.marker(e.latlng).addTo(map).bindPopup('End').openPopup();
+                computeRoute();
+            }
+        });
+
+        function computeRoute() {
+            fetch('/route', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start: [startMarker.getLatLng().lat, startMarker.getLatLng().lng],
+                    end: [endMarker.getLatLng().lat, endMarker.getLatLng().lng]
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.path) {
+                    if (routePolyline) map.removeLayer(routePolyline);
+                    const latlngs = data.path.map(p => L.latLng(p[0], p[1]));
+                    routePolyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
+                    map.fitBounds(routePolyline.getBounds());
+                } else {
+                    alert('No path found.');
+                }
+            });
+        }
+
+        fetch('/crimes.json')
+          .then(res => res.json())
+          .then(data => {
+            const heatData = data.map(d => [d.lat, d.long]);
+            L.heatLayer(heatData, { radius: 25, blur: 15 }).addTo(map);
+          });
+    </script>
+</body>
+</html>
